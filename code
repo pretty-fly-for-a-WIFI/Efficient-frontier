@@ -1,0 +1,121 @@
+import quandl
+import pandas as pd
+import matplotlib.pyplot as plt
+%matplotlib inline
+import numpy as np
+
+quandl.ApiConfig.api_key = '85wfeyp_a9n-JAH4yQqT'
+#efficient frontier for more than 2 assets / optimized portfolio
+ticker=['AAPL','AXP','BA','CAT']
+start_date='2000-01-01'
+end_date='2018-12-31'
+
+def price(ticker,start_date,end_date):
+    price = quandl.get_table('WIKI/PRICES', ticker = ticker, 
+                        qopts = { 'columns': ['ticker', 'date', 'adj_close'] }, 
+                        date = { 'gte': start_date, 'lte': end_date }, 
+                        paginate=True)
+    price= price.sort_values(by='date')
+    pivoted = price.pivot(index='date', columns='ticker', values='adj_close')
+    ret = pivoted/pivoted.shift(1)-1 # or use pivoted.pct_change()
+    ret.dropna(inplace=True)
+    return ret
+
+#calculate variance
+def sd(ret):
+    sd=ret[ticker].std()*np.sqrt(250)
+    return sd
+
+def exp_ret():
+    price = quandl.get_table('WIKI/PRICES', ticker = ticker, 
+                    qopts = { 'columns': ['ticker', 'date', 'adj_close'] }, 
+                    date = { 'gte': start_date, 'lte': end_date }, 
+                    paginate=True)
+    price= price.sort_values(by='date')
+    pivoted = price.pivot(index='date', columns='ticker', values='adj_close')
+    df = pivoted[ticker].resample('M').last().pct_change()
+    df=df*12
+    exp_ret=df.mean()
+    return exp_ret
+
+
+def assets(exp_ret, sd):
+    assets=pd.concat([exp_ret, sd],axis=1) #merge the data based on column (axis=1)
+    assets.columns=['exp_ret', 'std']
+    return assets
+
+def simulation(ret, expret):
+    p_ret = []
+    p_vol = []
+    p_weights = []
+    num_assets = len(ret[ticker].columns)
+    num_portfolios = 1000
+    for portfolio in range(num_portfolios):
+        w=np.random.random(num_assets)
+        w=w/sum(w)
+        weights=w    
+        p_weights.append(weights)
+        returns = np.dot(weights, expret)
+        p_ret.append(returns)
+        cov_matrix = ret[ticker].cov()
+        p_var= cov_matrix.mul(w,axis=0).mul(w,axis=1).sum().sum()
+        ann_sd = np.sqrt(p_var*250)
+        p_vol.append(ann_sd)
+
+    data={'exp_ret': p_ret,'std':p_vol}
+
+
+    for counter, symbol in enumerate(ret[ticker].columns.tolist()):
+        print(counter, symbol)
+        data[symbol+' weight']=[w[counter] for w in p_weights]   
+
+
+    portfolios=pd.DataFrame(data)
+    portfolios[portfolios['std']==portfolios['std'].min()]
+    return portfolios.plot.scatter(x='std', y='exp_ret', grid=True)
+
+
+
+def global_min(ret,expret):
+    p_ret = []
+    p_vol = []
+    p_weights = []
+    num_assets = len(ret[ticker].columns)
+    num_portfolios = 1000
+    for portfolio in range(num_portfolios):
+        w=np.random.random(num_assets)
+        w=w/sum(w)
+        weights=w    
+        p_weights.append(weights)
+        returns = np.dot(weights, expret)
+        p_ret.append(returns)
+        cov_matrix = ret[ticker].cov()
+        p_var= cov_matrix.mul(w,axis=0).mul(w,axis=1).sum().sum()
+        ann_sd = np.sqrt(p_var*250)
+        p_vol.append(ann_sd)
+
+    data={'exp_ret': p_ret,'std':p_vol}
+
+
+    for counter, symbol in enumerate(ret[ticker].columns.tolist()):
+        print(counter, symbol)
+        data[symbol+' weight']=[w[counter] for w in p_weights]   
+
+
+    portfolios=pd.DataFrame(data)
+    portfolios[portfolios['std']==portfolios['std'].min()]    
+    portfolios[portfolios['std']==portfolios['std'].min()]
+    return portfolios[portfolios['std']==portfolios['std'].min()]
+
+    
+ticker=['AAPL','AXP','BA','CAT']
+start_date='2000-01-01'
+end_date='2018-12-31'
+
+
+price(ticker, start_date,end_date)
+ret=price(ticker, start_date,end_date)
+std=sd(ret)
+expret=exp_ret()
+simulation(ret, expret)
+global_min(ret,expret)
